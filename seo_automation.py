@@ -1,3 +1,4 @@
+import base64
 import os
 import json
 import requests
@@ -19,7 +20,7 @@ def get_gsc_service():
     if not GOOGLE_SA_JSON:
         print('[WARN] No Google SA JSON found - skipping GSC step')
         return None
-    creds_info = json.loads(GOOGLE_SA_JSON)
+        creds_info = json.loads(base64.b64decode(GOOGLE_SA_JSON).decode('utf-8'))
         # Fix escaped newlines in private key from env var
     if 'private_key' in creds_info:
         creds_info['private_key'] = creds_info['private_key'].replace('\\n', '\n')
