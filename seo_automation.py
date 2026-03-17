@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# ── Config ──────────────────────────────────────────────────────────────────
+# -- Config --
 SITE_URL = os.environ.get('SITE_URL', 'https://www.transcript-iq.com')
 WEBFLOW_API_TOKEN = os.environ.get('WEBFLOW_API_TOKEN', '')
 WEBFLOW_COLLECTION_ID = os.environ.get('WEBFLOW_COLLECTION_ID', '')
@@ -14,16 +14,13 @@ GOOGLE_SA_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 
 SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
 
-# ── Google Search Console ────────────────────────────────────────────────────
+
 def get_gsc_service():
-    """Authenticate with Google Search Console via service account."""
     if not GOOGLE_SA_JSON:
         print('[WARN] No Google SA JSON found - skipping GSC step')
         return None
-        creds_info = json.loads(base64.b64decode(GOOGLE_SA_JSON).decode('utf-8'))
-        # Fix escaped newlines in private key from env var
-    if 'private_key' in creds_info:
-        creds_info['private_key'] = creds_info['private_key'].replace('\\n', '\n')
+    raw = base64.b64decode(GOOGLE_SA_JSON).decode('utf-8')
+    creds_info = json.loads(raw)
     creds = service_account.Credentials.from_service_account_info(
         creds_info, scopes=SCOPES
     )
@@ -31,7 +28,6 @@ def get_gsc_service():
 
 
 def fetch_search_analytics(service, days=28):
-    """Pull keyword data: queries with high impressions but low CTR."""
     end_date = datetime.utcnow().date()
     start_date = end_date - timedelta(days=days)
     body = {
@@ -48,7 +44,6 @@ def fetch_search_analytics(service, days=28):
 
 
 def find_opportunities(rows, ctr_threshold=0.03, min_impressions=50):
-    """Find pages with high impressions but low CTR - quick wins."""
     opportunities = []
     for row in rows:
         impressions = row.get('impressions', 0)
@@ -69,9 +64,7 @@ def find_opportunities(rows, ctr_threshold=0.03, min_impressions=50):
     return sorted(opportunities, key=lambda x: x['impressions'], reverse=True)
 
 
-# ── Webflow CMS ──────────────────────────────────────────────────────────────
 def get_webflow_items():
-    """Fetch all CMS items from Webflow collection."""
     if not WEBFLOW_API_TOKEN or not WEBFLOW_COLLECTION_ID:
         print('[WARN] Webflow credentials missing - skipping Webflow step')
         return []
@@ -88,21 +81,19 @@ def get_webflow_items():
 
 
 def generate_meta_suggestion(query, position, impressions):
-    """Generate an improved meta description suggestion for a given query."""
     return (
-        f"Discover expert insights on '{query}' — "
+        f"Discover expert insights on '{query}' - "
         f"trusted by professionals. Explore transcripts, "
         f"research, and analysis on Transcript IQ."
     )
 
 
 def save_opportunities_report(opportunities):
-    """Save opportunities to a JSON report file."""
     report = {
         'generated_at': datetime.utcnow().isoformat(),
         'site': SITE_URL,
         'total_opportunities': len(opportunities),
-        'opportunities': opportunities[:50]  # Top 50
+        'opportunities': opportunities[:50]
     }
     with open('seo_report.json', 'w') as f:
         json.dump(report, f, indent=2)
@@ -110,12 +101,10 @@ def save_opportunities_report(opportunities):
     return report
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
 def main():
     print(f'[START] SEO Automation run at {datetime.utcnow().isoformat()}')
     print(f'[INFO] Target site: {SITE_URL}')
 
-    # Step 1: Pull GSC data
     service = get_gsc_service()
     if service:
         print('[GSC] Fetching search analytics...')
@@ -133,7 +122,6 @@ def main():
     else:
         print('[SKIP] GSC step skipped - no credentials')
 
-    # Step 2: Audit Webflow CMS items
     items = get_webflow_items()
     if items:
         print(f'[WEBFLOW] Found {len(items)} CMS items')
