@@ -30,7 +30,7 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
           WEBFLOW_COLLECTION_ID: ${{ secrets.WEBFLOW_COLLECTION_ID }}
-          SITE_URL: https://www.transcript-iq.com
+                    SITE_URL: sc-domain:transcript-iq.com
         run: python seo_automation.py
 
       - name: Commit and push changes if any
