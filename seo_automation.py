@@ -20,6 +20,9 @@ def get_gsc_service():
         print('[WARN] No Google SA JSON found - skipping GSC step')
         return None
     creds_info = json.loads(GOOGLE_SA_JSON)
+        # Fix escaped newlines in private key from env var
+    if 'private_key' in creds_info:
+        creds_info['private_key'] = creds_info['private_key'].replace('\\n', '\n')
     creds = service_account.Credentials.from_service_account_info(
         creds_info, scopes=SCOPES
     )
