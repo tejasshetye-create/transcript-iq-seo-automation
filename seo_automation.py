@@ -9,7 +9,7 @@ from googleapiclient.discovery import build
 import google.generativeai as genai
 
 # -- Config --
-SITE_URL = os.environ.get('SITE_URL', 'https://www.transcript-iq.com')
+SITE_URL = os.environ.get('SITE_URL', 'sc-domain:transcript-iq.com')
 WEBFLOW_API_TOKEN = os.environ.get('WEBFLOW_API_TOKEN', '')
 WEBFLOW_COLLECTION_ID = os.environ.get('WEBFLOW_COLLECTION_ID', '')
 GOOGLE_SA_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
@@ -53,7 +53,7 @@ def fetch_seo_opportunities(service):
 # -- Generate blog with Gemini --
 def generate_blog_post(keyword):
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-pro')
     prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: \"{keyword}\"
 
 The blog post should be for transcript-iq.com, a market research platform that provides AI-powered transcript analysis.
