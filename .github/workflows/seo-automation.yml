@@ -10,35 +10,25 @@ on:
 jobs:
   seo-pipeline:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-auth-oauthlib google-auth-httplib2
-          pip install google-api-python-client
-          pip install requests python-dotenv
-          pip install anthropic
+          pip install google-auth google-auth-oauthlib google-api-python-client requests google-generativeai
 
-      - name: Run SEO Automation Script
+      - name: Run SEO automation
         env:
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SITE_URL: ${{ secrets.SITE_URL }}
           WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
           WEBFLOW_COLLECTION_ID: ${{ secrets.WEBFLOW_COLLECTION_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SITE_URL: sc-domain:transcript-iq.com
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python seo_automation.py
-
-      - name: Commit SEO report
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Actions"
-          git add seo_report.json
-          git diff --staged --quiet || git commit -m "SEO report: $(date +%Y-%m-%d)"
-          git push
