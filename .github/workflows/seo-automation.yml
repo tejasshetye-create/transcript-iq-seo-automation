@@ -10,7 +10,6 @@ on:
 jobs:
   seo-pipeline:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,19 +24,21 @@ jobs:
           pip install google-auth google-auth-oauthlib google-auth-httplib2
           pip install google-api-python-client
           pip install requests python-dotenv
+          pip install anthropic
 
       - name: Run SEO Automation Script
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
           WEBFLOW_COLLECTION_ID: ${{ secrets.WEBFLOW_COLLECTION_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SITE_URL: sc-domain:transcript-iq.com
         run: python seo_automation.py
 
-      - name: Commit and push report if any
+      - name: Commit SEO report
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "GitHub Actions Bot"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "SEO report: $(date +'%Y-%m-%d')"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Actions"
+          git add seo_report.json
+          git diff --staged --quiet || git commit -m "SEO report: $(date +%Y-%m-%d)"
           git push
