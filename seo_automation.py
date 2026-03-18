@@ -51,7 +51,7 @@ def fetch_seo_opportunities(service):
 
 # -- Generate blog with Gemini REST API --
 def generate_blog_post(keyword):
-    url = f'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}'
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}'
     prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: "{keyword}"
 
 The blog post should be for transcript-iq.com, a market research platform that provides AI-powered transcript analysis.
