@@ -6,7 +6,6 @@ import requests
 from datetime import datetime, timedelta
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import google.generativeai as genai
 
 # -- Config --
 SITE_URL = os.environ.get('SITE_URL', 'sc-domain:transcript-iq.com')
@@ -50,11 +49,10 @@ def fetch_seo_opportunities(service):
             })
     return opportunities[:5]
 
-# -- Generate blog with Gemini --
+# -- Generate blog with Gemini REST API --
 def generate_blog_post(keyword):
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-pro')
-    prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: \"{keyword}\"
+    url = f'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}'
+    prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: "{keyword}"
 
 The blog post should be for transcript-iq.com, a market research platform that provides AI-powered transcript analysis.
 
@@ -73,13 +71,17 @@ The slug should be lowercase with hyphens, max 60 chars.
 The meta_description should be 150-160 characters.
 The body should be HTML with <h2>, <p> tags."""
 
-    response = model.generate_content(prompt)
-    text = response.text.strip()
+    payload = {
+        'contents': [{'parts': [{'text': prompt}]}]
+    }
+    resp = requests.post(url, json=payload)
+    resp.raise_for_status()
+    text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
     # Extract JSON from response
     json_match = re.search(r'\{.*\}', text, re.DOTALL)
     if json_match:
         return json.loads(json_match.group())
-    raise ValueError(f"Could not parse JSON from Gemini response: {text[:200]}")
+    raise ValueError(f'Could not parse JSON from Gemini response: {text[:200]}')
 
 # -- Publish to Webflow CMS --
 def publish_to_webflow(post_data):
