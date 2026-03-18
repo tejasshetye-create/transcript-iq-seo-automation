@@ -22,7 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-auth-oauthlib google-api-python-client requests google-generativeai
+          pip install google-auth google-auth-oauthlib google-api-python-client requests
 
       - name: Run SEO automation
         env:
