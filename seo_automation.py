@@ -2,6 +2,7 @@ import base64
 import os
 import json
 import re
+import time
 import requests
 from datetime import datetime, timedelta
 from google.oauth2 import service_account
@@ -51,12 +52,9 @@ def fetch_seo_opportunities(service):
 
 # -- Generate blog with Gemini REST API --
 def generate_blog_post(keyword):
-    # Try multiple model names in order
     models_to_try = [
+        'gemini-2.0-flash-lite',
         'gemini-2.0-flash',
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-flash',
-        'gemini-1.0-pro',
     ]
     prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: "{keyword}"
 
@@ -84,16 +82,24 @@ The body should be HTML with <h2>, <p> tags."""
     for model in models_to_try:
         url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}'
         print(f'Trying model: {model}')
-        resp = requests.post(url, json=payload)
-        if resp.status_code == 200:
-            text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            raise ValueError(f'Could not parse JSON from Gemini: {text[:200]}')
+        for attempt in range(3):
+            resp = requests.post(url, json=payload)
+            if resp.status_code == 200:
+                text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                json_match = re.search(r'\{.*\}', text, re.DOTALL)
+                if json_match:
+                    return json.loads(json_match.group())
+                raise ValueError(f'Could not parse JSON from Gemini: {text[:200]}')
+            elif resp.status_code == 429:
+                wait_time = 30 * (attempt + 1)
+                print(f'Rate limited (429). Waiting {wait_time}s...')
+                time.sleep(wait_time)
+            else:
+                last_error = f'{model}: {resp.status_code} {resp.text[:100]}'
+                print(f'Failed: {last_error}')
+                break
         else:
-            last_error = f'{model}: {resp.status_code} {resp.text[:100]}'
-            print(f'Failed: {last_error}')
+            last_error = f'{model}: rate limited after 3 retries'
     raise Exception(f'All Gemini models failed. Last error: {last_error}')
 
 # -- Publish to Webflow CMS --
