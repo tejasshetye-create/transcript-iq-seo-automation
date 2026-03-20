@@ -72,7 +72,7 @@ The body should be HTML with <h2>, <p> tags."""
         'content-type': 'application/json'
     }
     payload = {
-        'model': 'claude-3-5-haiku-20241022',
+                'model': 'claude-3-haiku-20240307',
         'max_tokens': 2048,
         'messages': [{'role': 'user', 'content': prompt}]
     }
