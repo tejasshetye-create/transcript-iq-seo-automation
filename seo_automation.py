@@ -2,6 +2,7 @@ import base64
 import os
 import json
 import re
+import time
 import requests
 from datetime import datetime, timedelta
 from google.oauth2 import service_account
@@ -12,7 +13,7 @@ SITE_URL = os.environ.get('SITE_URL', 'sc-domain:transcript-iq.com')
 WEBFLOW_API_TOKEN = os.environ.get('WEBFLOW_API_TOKEN', '')
 WEBFLOW_COLLECTION_ID = os.environ.get('WEBFLOW_COLLECTION_ID', '')
 GOOGLE_SA_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
-CLAUDE_API_KEY = os.environ.get('CLAUDE_API_KEY', '')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 # -- Auth Google Search Console --
 def get_gsc_service():
@@ -49,7 +50,7 @@ def fetch_seo_opportunities(service):
             })
     return opportunities[:5]
 
-# -- Generate blog with Claude API --
+# -- Generate blog with Gemini REST API (1 post per run, free tier safe) --
 def generate_blog_post(keyword):
     prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: "{keyword}"
 The blog post should be for transcript-iq.com, a market research platform that provides AI-powered transcript analysis.
@@ -66,25 +67,26 @@ The slug should be lowercase with hyphens, max 60 chars.
 The meta_description should be 150-160 characters.
 The body should be HTML with <h2>, <p> tags."""
 
-    headers = {
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-    }
-    payload = {
-                'model': 'claude-3-haiku-20240307',
-        'max_tokens': 2048,
-        'messages': [{'role': 'user', 'content': prompt}]
-    }
-    resp = requests.post('https://api.anthropic.com/v1/messages', headers=headers, json=payload)
-    if resp.status_code == 200:
-        text = resp.json()['content'][0]['text'].strip()
-        json_match = re.search(r'\{.*\}', text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        raise ValueError(f'Could not parse JSON from Claude: {text[:200]}')
-    else:
-        raise Exception(f'Claude API error {resp.status_code}: {resp.text[:300]}')
+    payload = {'contents': [{'parts': [{'text': prompt}]}]}
+    model = 'gemini-2.0-flash-lite'
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}'
+
+    for attempt in range(3):
+        resp = requests.post(url, json=payload, timeout=60)
+        if resp.status_code == 200:
+            text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            raise ValueError(f'Could not parse JSON from Gemini: {text[:200]}')
+        elif resp.status_code == 429:
+            wait_time = 60 * (attempt + 1)
+            print(f'Rate limited. Waiting {wait_time}s before retry {attempt+1}/3...')
+            time.sleep(wait_time)
+        else:
+            raise Exception(f'Gemini error {resp.status_code}: {resp.text[:200]}')
+
+    raise Exception('Gemini rate limited after 3 retries. Will retry tomorrow.')
 
 # -- Publish to Webflow CMS --
 def publish_to_webflow(post_data):
@@ -108,42 +110,49 @@ def publish_to_webflow(post_data):
     resp = requests.post(url, headers=headers, json=payload)
     if resp.status_code in (200, 201):
         item_id = resp.json().get('_id')
-        print(f'Published: {post_data["title"]} (ID: {item_id})')
+        print(f'Published to Webflow: {post_data["title"]} (ID: {item_id})')
         pub_url = f'https://api.webflow.com/collections/{WEBFLOW_COLLECTION_ID}/items/publish'
         pub_resp = requests.put(pub_url, headers=headers, json={'itemIds': [item_id]})
         if pub_resp.status_code in (200, 202):
-            print(f'Live on site!')
+            print('Blog post is now LIVE on transcript-iq.com!')
         else:
-            print(f'Publish live warning: {pub_resp.status_code} {pub_resp.text[:200]}')
+            print(f'Publish warning: {pub_resp.status_code} {pub_resp.text[:200]}')
         return item_id
     else:
         raise Exception(f'Webflow error {resp.status_code}: {resp.text[:300]}')
 
 # -- Main --
 def main():
-    print('Starting SEO automation with Claude AI...')
-    if not CLAUDE_API_KEY:
-        raise ValueError('CLAUDE_API_KEY not set')
+    print('Starting SEO automation with Gemini AI...')
+    if not GEMINI_API_KEY:
+        raise ValueError('GEMINI_API_KEY not set')
     if not WEBFLOW_API_TOKEN:
         raise ValueError('WEBFLOW_API_TOKEN not set')
     if not WEBFLOW_COLLECTION_ID:
         raise ValueError('WEBFLOW_COLLECTION_ID not set')
+
     service = get_gsc_service()
     print('Connected to Google Search Console')
+
     opportunities = fetch_seo_opportunities(service)
     if not opportunities:
-        print('No SEO opportunities found today.')
+        print('No SEO opportunities found today. Exiting.')
         return
+
     print(f'Found {len(opportunities)} opportunities:')
     for opp in opportunities:
         print(f'  - {opp["query"]} (pos {opp["position"]}, {opp["impressions"]} impressions)')
+
+    # Only write 1 blog per run to stay within free tier
     top = opportunities[0]
     keyword = top['query']
-    print(f'\nGenerating blog post for: {keyword}')
+    print(f'\nGenerating 1 blog post for top keyword: {keyword}')
+
     post_data = generate_blog_post(keyword)
     print(f'Generated: {post_data["title"]}')
+
     item_id = publish_to_webflow(post_data)
-    print(f'Done! Blog post published. Item ID: {item_id}')
+    print(f'Done! Blog post published successfully. Item ID: {item_id}')
 
 if __name__ == '__main__':
     main()
