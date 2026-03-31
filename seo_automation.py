@@ -2,7 +2,6 @@ import base64
 import os
 import json
 import re
-import time
 import requests
 from datetime import datetime, timedelta
 from google.oauth2 import service_account
@@ -13,7 +12,7 @@ SITE_URL = os.environ.get('SITE_URL', 'sc-domain:transcript-iq.com')
 WEBFLOW_API_TOKEN = os.environ.get('WEBFLOW_API_TOKEN', '')
 WEBFLOW_COLLECTION_ID = os.environ.get('WEBFLOW_COLLECTION_ID', '')
 GOOGLE_SA_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 
 # -- Auth Google Search Console --
 def get_gsc_service():
@@ -50,10 +49,10 @@ def fetch_seo_opportunities(service):
             })
     return opportunities[:5]
 
-# -- Generate blog with Gemini REST API (1 post per run, free tier safe) --
+# -- Generate blog with Groq (free, no rate limit issues) --
 def generate_blog_post(keyword):
     prompt = f"""Write a comprehensive, SEO-optimized blog post for the keyword: "{keyword}"
-The blog post should be for transcript-iq.com, a market research platform that provides AI-powered transcript analysis.
+The blog post is for transcript-iq.com, a market research platform that provides AI-powered transcript analysis.
 Requirements:
 - Title: compelling, includes the keyword
 - Length: 600-800 words
@@ -61,32 +60,36 @@ Requirements:
 - Natural keyword usage throughout
 - Professional tone, helpful and informative
 - End with a call to action mentioning Transcript IQ
-Format the response as JSON with these exact keys:
+Respond ONLY with valid JSON, no markdown, no code blocks. Use this exact structure:
 {{"title": "...", "slug": "...", "meta_description": "...", "body": "..."}}
-The slug should be lowercase with hyphens, max 60 chars.
-The meta_description should be 150-160 characters.
-The body should be HTML with <h2>, <p> tags."""
+Rules:
+- slug: lowercase with hyphens only, max 60 chars
+- meta_description: 150-160 characters exactly
+- body: valid HTML using only <h2> and <p> tags"""
 
-    payload = {'contents': [{'parts': [{'text': prompt}]}]}
-    model = 'gemini-2.0-flash-lite'
-    url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}'
-
-    for attempt in range(3):
-        resp = requests.post(url, json=payload, timeout=60)
-        if resp.status_code == 200:
-            text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            raise ValueError(f'Could not parse JSON from Gemini: {text[:200]}')
-        elif resp.status_code == 429:
-            wait_time = 60 * (attempt + 1)
-            print(f'Rate limited. Waiting {wait_time}s before retry {attempt+1}/3...')
-            time.sleep(wait_time)
-        else:
-            raise Exception(f'Gemini error {resp.status_code}: {resp.text[:200]}')
-
-    raise Exception('Gemini rate limited after 3 retries. Will retry tomorrow.')
+    headers = {
+        'Authorization': f'Bearer {GROQ_API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'model': 'llama-3.3-70b-versatile',
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': 2048,
+        'temperature': 0.7
+    }
+    resp = requests.post('https://api.groq.com/openai/v1/chat/completions',
+                         headers=headers, json=payload, timeout=60)
+    if resp.status_code == 200:
+        text = resp.json()['choices'][0]['message']['content'].strip()
+        # Strip markdown code blocks if present
+        text = re.sub(r'^```(?:json)?\s*', '', text)
+        text = re.sub(r'\s*```$', '', text)
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        raise ValueError(f'Could not parse JSON from Groq response: {text[:300]}')
+    else:
+        raise Exception(f'Groq API error {resp.status_code}: {resp.text[:300]}')
 
 # -- Publish to Webflow CMS --
 def publish_to_webflow(post_data):
@@ -123,9 +126,9 @@ def publish_to_webflow(post_data):
 
 # -- Main --
 def main():
-    print('Starting SEO automation with Gemini AI...')
-    if not GEMINI_API_KEY:
-        raise ValueError('GEMINI_API_KEY not set')
+    print('Starting SEO automation with Groq AI (free tier)...')
+    if not GROQ_API_KEY:
+        raise ValueError('GROQ_API_KEY not set')
     if not WEBFLOW_API_TOKEN:
         raise ValueError('WEBFLOW_API_TOKEN not set')
     if not WEBFLOW_COLLECTION_ID:
@@ -143,16 +146,15 @@ def main():
     for opp in opportunities:
         print(f'  - {opp["query"]} (pos {opp["position"]}, {opp["impressions"]} impressions)')
 
-    # Only write 1 blog per run to stay within free tier
     top = opportunities[0]
     keyword = top['query']
-    print(f'\nGenerating 1 blog post for top keyword: {keyword}')
+    print(f'Generating blog post for: {keyword}')
 
     post_data = generate_blog_post(keyword)
-    print(f'Generated: {post_data["title"]}')
+    print(f'Generated title: {post_data["title"]}')
 
     item_id = publish_to_webflow(post_data)
-    print(f'Done! Blog post published successfully. Item ID: {item_id}')
+    print(f'SUCCESS! Blog post live on transcript-iq.com. Item ID: {item_id}')
 
 if __name__ == '__main__':
     main()
